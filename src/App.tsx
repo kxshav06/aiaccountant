@@ -131,13 +131,14 @@ const StatCard = ({ title, amount, type, icon: Icon }: { title: string, amount: 
       </span>
     </div>
     <h3 className="text-gray-500 text-sm font-medium mb-1">{title}</h3>
-    <p className="text-2xl font-bold text-black">${amount.toLocaleString()}</p>
+    <p className="text-2xl font-bold text-black">₹{amount.toLocaleString()}</p>
   </div>
 );
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -175,9 +176,14 @@ export default function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) setShowTroubleshoot(true);
+    }, 5000);
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+      clearTimeout(timer);
       if (u) {
         // Create user profile if not exists
         const userRef = doc(db, 'users', u.uid);
@@ -187,7 +193,7 @@ export default function App() {
               uid: u.uid,
               displayName: u.displayName,
               email: u.email,
-              currency: 'USD',
+              currency: 'INR',
               monthlyIncome: 0,
               createdAt: new Date().toISOString()
             });
@@ -357,7 +363,14 @@ export default function App() {
     setIsChatLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      // Standard Vite way to access variables
+      const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+      
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'YOUR_API_KEY_HERE') {
+        throw new Error('Gemini API Key is missing. Please add VITE_GEMINI_API_KEY to your Vercel Environment Variables and REDEPLOY.');
+      }
+      
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{ role: 'user', parts: [{ text: userMsg }] }],
@@ -368,7 +381,7 @@ export default function App() {
           - Budgets: ${JSON.stringify(budgets)}
           - Goals: ${JSON.stringify(goals)}
           
-          Provide professional, supportive, and data-driven financial advice. Use tables or lists when helpful.`
+          Provide professional, supportive, and data-driven financial advice. All currency values are in Indian Rupees (₹). Use tables or lists when helpful.`
         }
       });
 
@@ -429,8 +442,33 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin text-black" size={48} />
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 p-6">
+        <Loader2 className="animate-spin text-black mb-6" size={48} />
+        <p className="text-gray-500 font-medium">Initializing AI Accountant...</p>
+        
+        {showTroubleshoot && (
+          <div className="mt-10 p-6 bg-white rounded-3xl border border-red-100 shadow-xl max-w-md text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h3 className="text-red-600 font-bold mb-2">Taking longer than usual?</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              This usually means your Firebase configuration or Authorized Domains are not set up correctly for this URL.
+            </p>
+            <div className="space-y-3">
+              <a 
+                href="https://console.firebase.google.com/" 
+                target="_blank" 
+                className="block w-full bg-black text-white py-3 rounded-xl font-bold text-sm"
+              >
+                Go to Firebase Console
+              </a>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="block w-full bg-gray-100 text-black py-3 rounded-xl font-bold text-sm"
+              >
+                Refresh Page
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -615,7 +653,7 @@ export default function App() {
                           "font-bold",
                           tx.type === 'income' ? "text-green-600" : "text-black"
                         )}>
-                          {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}
+                          {tx.type === 'income' ? '+' : '-'}₹{tx.amount.toLocaleString()}
                         </p>
                         <p className="text-[10px] uppercase tracking-widest font-bold text-gray-300">{tx.category}</p>
                       </div>
@@ -663,7 +701,7 @@ export default function App() {
                           "text-xl font-black",
                           tx.type === 'income' ? "text-green-600" : "text-black"
                         )}>
-                          {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}
+                          {tx.type === 'income' ? '+' : '-'}₹{tx.amount.toLocaleString()}
                         </p>
                         <button 
                           onClick={() => handleDeleteTransaction(tx.id)}
@@ -711,7 +749,7 @@ export default function App() {
                       </div>
                       <h4 className="text-xl font-bold mb-2">Ask me anything about your finances</h4>
                       <p className="text-gray-400 max-w-sm">
-                        "How much did I spend on food this month?" or "Can I afford a $500 purchase?"
+                        "How much did I spend on food this month?" or "Can I afford a ₹50,000 purchase?"
                       </p>
                     </div>
                   )}
@@ -791,13 +829,13 @@ export default function App() {
                           <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{budget.month}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-gray-400">Limit: ${budget.limit.toLocaleString()}</p>
+                          <p className="text-sm font-bold text-gray-400">Limit: ₹{budget.limit.toLocaleString()}</p>
                         </div>
                       </div>
                       
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm font-bold">
-                          <span>Spent: ${spent.toLocaleString()}</span>
+                          <span>Spent: ₹{spent.toLocaleString()}</span>
                           <span className={cn(percent > 90 ? "text-red-500" : "text-black")}>{percent}%</span>
                         </div>
                         <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -846,7 +884,7 @@ export default function App() {
                       <div className="flex justify-between items-start mb-6">
                         <div>
                           <h4 className="text-xl font-black">{goal.title}</h4>
-                          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Target: ${goal.targetAmount.toLocaleString()}</p>
+                          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Target: ₹{goal.targetAmount.toLocaleString()}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-gray-400 font-bold">By {format(new Date(goal.deadline), 'MMM yyyy')}</p>
@@ -855,7 +893,7 @@ export default function App() {
                       
                       <div className="space-y-4">
                         <div className="flex justify-between text-sm font-bold">
-                          <span>Saved: ${goal.currentAmount.toLocaleString()}</span>
+                          <span>Saved: ₹{goal.currentAmount.toLocaleString()}</span>
                           <span>{percent}%</span>
                         </div>
                         <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -866,16 +904,16 @@ export default function App() {
                         </div>
                         <div className="flex gap-2">
                           <button 
-                            onClick={() => handleUpdateGoalProgress(goal.id, goal.currentAmount, 10)}
-                            className="flex-1 bg-gray-50 hover:bg-gray-100 py-2 rounded-xl text-xs font-bold transition-colors"
-                          >
-                            +$10
-                          </button>
-                          <button 
                             onClick={() => handleUpdateGoalProgress(goal.id, goal.currentAmount, 100)}
                             className="flex-1 bg-gray-50 hover:bg-gray-100 py-2 rounded-xl text-xs font-bold transition-colors"
                           >
-                            +$100
+                            +₹100
+                          </button>
+                          <button 
+                            onClick={() => handleUpdateGoalProgress(goal.id, goal.currentAmount, 1000)}
+                            className="flex-1 bg-gray-50 hover:bg-gray-100 py-2 rounded-xl text-xs font-bold transition-colors"
+                          >
+                            +₹1000
                           </button>
                         </div>
                       </div>
@@ -940,7 +978,7 @@ export default function App() {
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Amount</label>
                   <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">$</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">₹</span>
                     <input
                       type="number"
                       required
@@ -1014,7 +1052,7 @@ export default function App() {
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Monthly Limit</label>
                   <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">$</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">₹</span>
                     <input
                       type="number"
                       required
@@ -1090,14 +1128,17 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Target Amount</label>
-                    <input
-                      type="number"
-                      required
-                      value={newGoal.targetAmount}
-                      onChange={(e) => setNewGoal(prev => ({ ...prev, targetAmount: e.target.value }))}
-                      placeholder="0.00"
-                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold focus:ring-2 ring-black outline-none"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 font-bold">₹</span>
+                      <input
+                        type="number"
+                        required
+                        value={newGoal.targetAmount}
+                        onChange={(e) => setNewGoal(prev => ({ ...prev, targetAmount: e.target.value }))}
+                        placeholder="0.00"
+                        className="w-full bg-gray-50 border-none rounded-2xl px-10 py-4 font-bold focus:ring-2 ring-black outline-none"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Deadline</label>
@@ -1113,13 +1154,16 @@ export default function App() {
 
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Initial Savings (Optional)</label>
-                  <input
-                    type="number"
-                    value={newGoal.currentAmount}
-                    onChange={(e) => setNewGoal(prev => ({ ...prev, currentAmount: e.target.value }))}
-                    placeholder="0.00"
-                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold focus:ring-2 ring-black outline-none"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={newGoal.currentAmount}
+                      onChange={(e) => setNewGoal(prev => ({ ...prev, currentAmount: e.target.value }))}
+                      placeholder="0.00"
+                      className="w-full bg-gray-50 border-none rounded-2xl px-10 py-4 font-bold focus:ring-2 ring-black outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
